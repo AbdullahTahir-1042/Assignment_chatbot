@@ -44,7 +44,7 @@ const hostOf = (url: string | undefined): string | null => {
   }
 };
 
-const testHost = hostOf(parse(readFileSync(testEnvPath)).["DATABASE_URL"]);
+const testHost = hostOf(parse(readFileSync(testEnvPath, "utf8"))["DATABASE_URL"]);
 if (!testHost) {
   throw new Error("backend/.env.test does not define a parseable DATABASE_URL");
 }

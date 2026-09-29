@@ -5,6 +5,7 @@ import { env } from "./config/env.js";
 import { requestLogger } from "./middleware/requestLogger.js";
 import { apiLimiter, chatLimiter } from "./middleware/rateLimiter.js";
 import { authRouter } from "./modules/auth/auth.routes.js";
+import { appointmentRouter } from "./modules/appointments/appointments.routes.js";
 import { notFound } from "./middleware/notFound.js";
 import { errorHandler } from "./middleware/errorHandler.js";
 import { pool } from "./config/db.js";
@@ -52,6 +53,7 @@ export function createApp() {
   // would also catch 401s from GET /auth/me, letting a client with a stale
   // token spend the login budget.
   app.use("/api/auth", authRouter);
+  app.use("/api/appointments", appointmentRouter);
 
   app.use(notFound);
   app.use(errorHandler);
