@@ -132,7 +132,11 @@ export const appointmentRepository = {
       includeCancelled: boolean;
     },
   ): Promise<Appointment[]> {
-    const params: unknown[] = [input.userId, input.businessId, input.limit];
+    // Only parameters the SQL actually references. Postgres rejects an unused
+    // one outright ("could not determine data type of parameter $3"), so the
+    // limit is pushed later alongside its own placeholder rather than reserved
+    // here.
+    const params: unknown[] = [input.userId, input.businessId];
     const where: string[] = ["user_id = $1", "business_id = $2"];
 
     if (!input.includeCancelled) {

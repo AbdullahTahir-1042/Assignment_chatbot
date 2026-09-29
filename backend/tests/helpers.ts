@@ -47,9 +47,15 @@ export const testPool = (): pg.Pool =>
 /**
  * Appointments are namespaced by their `user_id`, and users cascade-delete, so
  * removing test users removes their appointments too.
+ *
+ * Businesses are cleaned up as well. Anything a test inserts that is NOT
+ * reachable from a user row is orphaned otherwise, and orphans accumulate on
+ * every run. The name must carry the same prefix as the users, or this misses
+ * it -- which is exactly how an earlier revision leaked one.
  */
 export const cleanupByPrefix = async (pool: pg.Pool, prefix: string): Promise<void> => {
   await pool.query("DELETE FROM users WHERE email LIKE $1", [`${prefix}%`]);
+  await pool.query("DELETE FROM businesses WHERE name LIKE $1", [`${prefix}%`]);
 };
 
 export const median = (xs: number[]): number => {

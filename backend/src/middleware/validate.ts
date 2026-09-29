@@ -13,9 +13,15 @@ import type { z } from "zod";
  */
 export const validateBody =
   <S extends z.ZodType>(schema: S): RequestHandler =>
-  (req, _res, next) => {
+  (req, res, next) => {
     try {
-      req.body = schema.parse(req.body ?? {});
+      const parsed = schema.parse(req.body ?? {});
+      // Written to BOTH req.body and res.locals so a handler can read either.
+      // Writing only to req.body is what made an earlier appointments route
+      // read undefined and 500: tsc cannot catch it because the accessors are
+      // generic casts, so the mismatch stays invisible to the type checker.
+      req.body = parsed;
+      res.locals.validatedBody = parsed;
       next();
     } catch (err) {
       next(err);
@@ -24,9 +30,13 @@ export const validateBody =
 
 export const validateQuery =
   <S extends z.ZodType>(schema: S): RequestHandler =>
-  (_req, res, next) => {
+  (req, res, next) => {
     try {
-      res.locals.validated = schema.parse(_req.query);
+      // A SEPARATE key from validatedBody. Sharing one key means a route that
+      // validates both (a PATCH with a filter, say) silently loses the body to
+      // whichever validator ran last. No route does both today, so this was
+      // latent rather than live, but it is a trap worth closing now.
+      res.locals.validatedQuery = schema.parse(req.query);
       next();
     } catch (err) {
       next(err);
@@ -44,9 +54,20 @@ export const validateParams =
     }
   };
 
-/** Typed reads of what the validators stored. */
-export const validated = <T>(res: { locals: Record<string, unknown> }): T =>
-  res.locals["validated"] as T;
+/**
+ * Typed reads of what the validators stored.
+ *
+ * Every one of these is a cast, so none can fail at compile time. If the
+ * matching validator is missing from the route's middleware chain, they
+ * silently yield undefined and the failure surfaces as a 500 far from the
+ * cause. They mark which validator belongs on which part of the request --
+ * they are not a safety net.
+ */
+export const validatedBody = <T>(res: { locals: Record<string, unknown> }): T =>
+  res.locals.validatedBody as T;
+
+export const validatedQuery = <T>(res: { locals: Record<string, unknown> }): T =>
+  res.locals.validatedQuery as T;
 
 export const validatedParams = <T>(res: { locals: Record<string, unknown> }): T =>
-  res.locals["validatedParams"] as T;
+  res.locals.validatedParams as T;

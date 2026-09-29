@@ -6,8 +6,9 @@ import {
   validateBody,
   validateParams,
   validateQuery,
-  validated,
+  validatedBody,
   validatedParams,
+  validatedQuery,
 } from "../../middleware/validate.js";
 import {
   appointmentIdSchema,
@@ -35,7 +36,7 @@ appointmentRouter.post(
     const appointment = await appointmentService.create(
       pool,
       tenantOf(res),
-      validated<CreateAppointmentInput>(res),
+      validatedBody<CreateAppointmentInput>(res),
       // Source is the server's call: the chat extractor passes "chat", the
       // fallback form passes "form". A client cannot forge it into claiming a
       // booking came from the assistant.
@@ -49,7 +50,7 @@ appointmentRouter.get(
   "/",
   validateQuery(listAppointmentsSchema),
   async (_req: Request, res: Response) => {
-    const { cursor: rawCursor, ...query } = validated<
+    const { cursor: rawCursor, ...query } = validatedQuery<
       z.infer<typeof listAppointmentsSchema>
     >(res);
     const cursor = parseCursor(rawCursor);
