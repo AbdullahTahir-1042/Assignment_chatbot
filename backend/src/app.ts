@@ -3,9 +3,10 @@ import cors from "cors";
 import helmet from "helmet";
 import { env } from "./config/env.js";
 import { requestLogger } from "./middleware/requestLogger.js";
-import { apiLimiter, chatLimiter } from "./middleware/rateLimiter.js";
+import { apiLimiter } from "./middleware/rateLimiter.js";
 import { authRouter } from "./modules/auth/auth.routes.js";
 import { appointmentRouter } from "./modules/appointments/appointments.routes.js";
+import { chatRouter } from "./modules/chat/chat.routes.js";
 import { notFound } from "./middleware/notFound.js";
 import { errorHandler } from "./middleware/errorHandler.js";
 import { pool } from "./config/db.js";
@@ -44,7 +45,10 @@ export function createApp() {
     }
   });
 
-  app.use("/api/chat", chatLimiter);
+  // Every /api path, chat included, shares the general ceiling. The chat
+  // limiter is applied inside chatRouter so its budget is per user rather than
+  // per IP -- a shared office IP should not exhaust one person's allowance, and
+  // the AI call behind the endpoint is what that limit exists to protect.
   app.use("/api", apiLimiter);
 
   // authLimiter is deliberately NOT mounted here. It is applied to
@@ -54,6 +58,7 @@ export function createApp() {
   // token spend the login budget.
   app.use("/api/auth", authRouter);
   app.use("/api/appointments", appointmentRouter);
+  app.use("/api/chat", chatRouter);
 
   app.use(notFound);
   app.use(errorHandler);
