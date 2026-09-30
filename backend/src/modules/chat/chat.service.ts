@@ -5,6 +5,7 @@ import { logger } from "../../shared/logger.js";
 import { appointmentService } from "../appointments/appointments.service.js";
 import { buildSystemPrompt, complete } from "./ai.client.js";
 import {
+  formatBooked,
   formatConfirmation,
   localNowForPrompt,
   missingBookingFields,
@@ -104,16 +105,32 @@ const base = (
   appointment: null,
 });
 
-/** The prompt: the draft, the recent turns, and the current local date. */
-const buildUserPrompt = (draft: Draft, history: { role: string; content: string }[]): string => {
-  const lines = history.map((m) => `${m.role}: ${m.content}`);
-  const collected = Object.entries(draft)
-    .filter(([, v]) => v !== undefined)
-    .map(([k, v]) => `${k}=${String(v)}`)
+/**
+ * The prompt: the draft, the recent turns, the current local date, and the
+ * message the user just sent.
+ *
+ * The newest message is passed in explicitly rather than read from history.
+ * History is fetched BEFORE the current message is persisted, so on the first
+ * turn it is empty and the model would be asked to extract from a conversation
+ * that does not contain what the user actually said -- and it would helpfully
+ * return nulls for a request it never saw.
+ */
+const buildUserPrompt = (
+  draft: Draft,
+  history: { role: string; content: string }[],
+  currentText: string,
+): string => {
+  // Only the fields the model is allowed to return. startsAtUtc and timezone
+  // are derived state; listing them as "collected" invites it to echo them.
+  const collected = (["service", "date", "time", "durationMinutes"] as const)
+    .filter((key) => draft[key] !== undefined)
+    .map((key) => `${key}=${String(draft[key])}`)
     .join(" ");
+  const lines = history.map((m) => `${m.role}: ${m.content}`);
   return [
     collected ? `Already collected: ${collected}` : "Already collected: nothing yet",
     ...(lines.length ? ["Recent conversation:", ...lines] : []),
+    `Newest user message: ${currentText}`,
     "Extract only what the newest user message states.",
   ].join("\n");
 };
@@ -213,7 +230,7 @@ export const chatService = {
 
     // --- 2. a whole-message "yes" books, inside one transaction -------------
     if (wasConfirming && AFFIRM.test(lower)) {
-      return chatService.confirm(tenant, session);
+      return chatService.confirm(tenant, session, text);
     }
 
     if (wasConfirming) {
@@ -232,7 +249,7 @@ export const chatService = {
         timezone,
         weekday: DateTime.fromISO(`${now.date}T12:00:00`, { zone: timezone }).toFormat("cccc"),
       }),
-      user: buildUserPrompt(session.draft, history),
+      user: buildUserPrompt(session.draft, history, text),
     });
 
     await chatRepository.addMessage(pool, { sessionId: session.id, role: "user", content: text });
@@ -348,7 +365,11 @@ export const chatService = {
    * intact, because from the user's point of view the booking simply is not
    * available yet.
    */
-  async confirm(tenant: Tenant, session: { id: string; draft: Draft }): Promise<ChatReply> {
+  async confirm(
+    tenant: Tenant,
+    session: { id: string; draft: Draft },
+    confirmationText: string,
+  ): Promise<ChatReply> {
     const { draft } = session;
     if (!draft.startsAtUtc || !draft.service) {
       return base(
@@ -362,6 +383,15 @@ export const chatService = {
 
     try {
       const appointment = await withTransaction(async (client: pg.PoolClient) => {
+        // The user's own "yes" is part of the conversation, so it is saved
+        // alongside the booking. Resuming the session later has to show what
+        // they agreed to, not a confirmation question with no answer after it.
+        await chatRepository.addMessage(client, {
+          sessionId: session.id,
+          role: "user",
+          content: confirmationText,
+          meta: { kind: "confirmation" },
+        });
         const created = await appointmentService.create(
           client,
           tenant,
@@ -375,7 +405,11 @@ export const chatService = {
         await chatRepository.addMessage(client, {
           sessionId: session.id,
           role: "assistant",
-          content: `Booked: ${draft.service} on ${startsAt.toISOString()}.`,
+          content: formatBooked({
+            service: draft.service!,
+            startsAt,
+            timezone: draft.timezone ?? DEFAULT_TIMEZONE,
+          }),
           meta: { kind: "booked", appointmentId: created.id },
         });
         await chatRepository.completeSession(client, session.id);
@@ -396,6 +430,14 @@ export const chatService = {
       if (isSlotTaken(err)) {
         // Drop the confirmed instant so the next turn must re-resolve a time.
         await chatRepository.saveDraft(pool, session.id, { ...draft, startsAtUtc: undefined });
+        // Nothing was booked, so this is not the transactional turn, but the
+        // user's "yes" still happened and belongs in the transcript.
+        await chatRepository.addMessage(pool, {
+          sessionId: session.id,
+          role: "user",
+          content: confirmationText,
+          meta: { kind: "confirmation" },
+        });
         const reply = "That time has just been taken. What other time works for you?";
         await chatRepository.addMessage(pool, {
           sessionId: session.id,

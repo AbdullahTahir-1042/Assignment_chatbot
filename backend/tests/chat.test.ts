@@ -171,6 +171,59 @@ describe("chat: happy path", () => {
     // The session is completed in the same transaction as the insert.
     const session = await pool.query("SELECT status FROM chat_sessions WHERE id = $1", [sessionId]);
     expect(session.rows[0].status).toBe("completed");
+
+    // The user's own "yes" is part of the transcript. A resumed session that
+    // showed the confirmation question with no answer after it would look like
+    // the assistant booked something nobody agreed to.
+    const messages = await pool.query(
+      "SELECT role, content FROM chat_messages WHERE session_id = $1 ORDER BY created_at, id",
+      [sessionId],
+    );
+    const contents = messages.rows.map((m: { role: string; content: string }) => m.content);
+    expect(contents).toContain("yes");
+    const lastTwo = messages.rows.slice(-2).map((m: { role: string }) => m.role);
+    expect(lastTwo).toEqual(["user", "assistant"]);
+
+    // The stored booking message is read back on resume, so it has to read like
+    // the confirmation the user agreed to -- not a raw UTC instant.
+    const booked = messages.rows.at(-1).content as string;
+    expect(booked).toMatch(/^Booked: Haircut on .+ at \d{1,2}:\d{2} [AP]M\.$/);
+    expect(booked).not.toContain("Z");
+  });
+
+  it("sends the newest message to the model, not just the earlier turns", async () => {
+    const c = await signup("promptwiring");
+    complete.mockResolvedValueOnce(ok({ service: "Haircut" }));
+
+    await say(c, "I want a haircut tomorrow at 4pm");
+
+    // The model can only extract what it was shown. History is read before the
+    // current message is persisted, so the prompt has to carry it explicitly --
+    // without this, the first turn asks a model to extract from an empty
+    // conversation and it correctly answers "nothing stated".
+    expect(complete).toHaveBeenCalledTimes(1);
+    const { user: prompt } = complete.mock.calls[0]![0] as { user: string };
+    expect(prompt).toContain("I want a haircut tomorrow at 4pm");
+    expect(prompt).toMatch(/Newest user message: I want a haircut tomorrow at 4pm/);
+  });
+
+  it("includes the earlier turns so a follow-up is read in context", async () => {
+    const c = await signup("promptcontext");
+    complete.mockResolvedValueOnce(ok({ service: "Haircut" }));
+    const first = await say(c, "I want a haircut");
+    const sessionId = first.body.sessionId as string;
+
+    complete.mockResolvedValueOnce(ok({ time: "16:00" }));
+    await say(c, "4pm works", sessionId);
+
+    const { user: prompt } = complete.mock.calls[1]![0] as { user: string };
+    // The previous turn is context; the new one is the thing being extracted.
+    expect(prompt).toContain("user: I want a haircut");
+    expect(prompt).toContain("Newest user message: 4pm works");
+    // Collected fields are the model's own earlier output, restated for it.
+    expect(prompt).toContain("service=Haircut");
+    // Derived state is not the model's to fill in.
+    expect(prompt).not.toContain("startsAtUtc");
   });
 
   it("keeps already-collected fields when the model returns nulls", async () => {

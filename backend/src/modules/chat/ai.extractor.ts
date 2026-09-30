@@ -74,8 +74,31 @@ export const formatConfirmation = (input: {
 };
 
 /** The minimum a booking needs before code will offer to confirm it. */
-export const BOOKABLE_FIELDS = ["service", "date", "time"] as const;
+/**
+ * "Booked: Haircut on Thu 1 Oct at 4:00 PM." -- the same shape as the
+ * confirmation, minus the question mark.
+ *
+ * The booked message is stored in the transcript and read back on resume, so it
+ * has to read like the confirmation the user agreed to. A raw toISOString()
+ * here shows a UTC instant to someone who never spoke in UTC, and disagrees
+ * with the "4:00 PM" they were shown a moment earlier.
+ */
+export const formatBooked = (input: {
+  service: string;
+  startsAt: Date;
+  timezone: string;
+}): string => {
+  const local = DateTime.fromJSDate(input.startsAt).setZone(input.timezone);
+  if (!local.isValid) {
+    return `Booked: ${input.service}.`;
+  }
+  return `Booked: ${input.service} on ${local.toFormat("ccc d LLL", CONFIRM_LOCALE)} at ${local.toFormat(
+    "h:mm a",
+    CONFIRM_LOCALE,
+  )}.`;
+};
 
+export const BOOKABLE_FIELDS = ["service", "date", "time"] as const;
 export const missingBookingFields = (draft: {
   service?: string | undefined;
   date?: string | undefined;
