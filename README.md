@@ -256,6 +256,9 @@ mobile it collapses to a single column with a compact logo above the card.
 | **Confirm password** | Live "Passwords do not match" hint before you even submit |
 | **Error banner** | Server messages (e.g. `EMAIL_TAKEN`) render above the submit button |
 
+<img width="910" height="426" alt="image" src="https://github.com/user-attachments/assets/3f1449e0-e149-4597-9071-90c0c83d4ea0" />
+
+
 ### Dashboard — chat beside calendar
 
 The signed-in home is a two-pane split: a WhatsApp-style chat on the left
@@ -301,6 +304,9 @@ right.
 `Oct 07`), the service name, a status badge, the duration, a `· booked via chat`
 marker for AI-created bookings, and a **Cancel** action while confirmed.
 
+<img width="940" height="431" alt="image" src="https://github.com/user-attachments/assets/61d0cbde-c082-44bd-b0f2-942f4f17b320" />
+
+
 ### Profile
 
 An "Account" eyebrow, an identity card with a gradient initial avatar, name,
@@ -311,6 +317,9 @@ Editing is in place: `Edit` swaps the read-only detail list for a two-field
 form with `Cancel` / `Save changes`, and a green **Saved** confirmation with a
 check glyph appears for 2.5s afterwards. A server-side email conflict is
 rendered on the email field itself, not as a generic banner.
+
+<img width="936" height="429" alt="image" src="https://github.com/user-attachments/assets/4da2d597-0cc0-4e13-aeec-0172e9828dbd" />
+
 
 ### User menu
 
