@@ -383,8 +383,17 @@ describe("chat: yes and no are whole-message only", () => {
     complete.mockResolvedValueOnce(ok({ service: "Haircut", date: soon(16), time: "09:00" }));
     const res = await say(c, "haircut");
     const sessionId = res.body.sessionId as string;
+
+    complete.mockClear();
     const declined = await say(c, "no", sessionId);
-    expect(declined.body.status).toBe("abandoned");
+    // Declining drops the offer, not the conversation: same session, still live.
+    expect(complete).not.toHaveBeenCalled();
+    expect(declined.body.status).toBe("active");
+    expect(declined.body.awaitingConfirmation).toBe(false);
+    expect(declined.body.draft.startsAtUtc).toBeUndefined();
+    expect(declined.body.reply).toMatch(/no problem/i);
+    const session = await pool.query("SELECT status FROM chat_sessions WHERE id = $1", [sessionId]);
+    expect(session.rows[0].status).toBe("active");
   });
 
   it("a 'no' outside the confirmation state is just input", async () => {
@@ -493,7 +502,7 @@ describe("chat: taken slot", () => {
 });
 
 describe("chat: flow control", () => {
-  it("abandons on a plain no, without booking", async () => {
+it("declining a confirmation keeps the session active for a new booking", async () => {
     const c = await signup("no");
     complete.mockResolvedValueOnce(ok({ service: "Haircut", date: soon(10), time: "09:00" }));
     const res = await say(c, "haircut");
@@ -502,16 +511,27 @@ describe("chat: flow control", () => {
     complete.mockClear();
     const declined = await say(c, "no thanks", sessionId);
     expect(complete).not.toHaveBeenCalled();
-    expect(declined.body.status).toBe("abandoned");
+    expect(declined.body.status).toBe("active");
     expect(declined.body.appointment).toBeNull();
+    expect(declined.body.draft.service).toBeUndefined();
 
     const session = await pool.query("SELECT status FROM chat_sessions WHERE id = $1", [sessionId]);
-    expect(session.rows[0].status).toBe("abandoned");
+    expect(session.rows[0].status).toBe("active");
     const count = await pool.query(
       "SELECT count(*)::int AS n FROM appointments WHERE user_id = $1",
       [c.userId],
     );
     expect(count.rows[0].n).toBe(0);
+
+    // The same conversation keeps working: declined offer, then a new booking.
+    complete.mockResolvedValueOnce(ok({ service: "Mens cut", date: soon(12), time: "14:00" }));
+    const retry = await say(c, "a mens cut on that day at 2pm", sessionId);
+    expect(retry.body.awaitingConfirmation).toBe(true);
+    expect(retry.body.draft.service).toBe("Mens cut");
+    complete.mockClear();
+    const booked = await say(c, "yes", sessionId);
+    expect(booked.body.appointment).not.toBeNull();
+    expect(booked.body.status).toBe("completed");
   });
 
   it("refuses to start again on a finished session", async () => {
@@ -519,7 +539,12 @@ describe("chat: flow control", () => {
     complete.mockResolvedValueOnce(ok({ service: "Haircut", date: soon(11), time: "09:00" }));
     const res = await say(c, "haircut");
     const sessionId = res.body.sessionId as string;
-    await say(c, "no", sessionId);
+    // The hard stop is the explicit cancel endpoint -- a declined message no
+    // longer ends the session.
+    await request(app)
+      .post(`/api/chat/${sessionId}/cancel`)
+      .set("authorization", `Bearer ${c.token}`)
+      .set("x-forwarded-for", c.ip);
 
     complete.mockClear();
     const again = await say(c, "haircut", sessionId);

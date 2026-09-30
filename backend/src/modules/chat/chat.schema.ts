@@ -74,7 +74,7 @@ export type ChatReply = {
 };
 
 /** Model contract, in one place so the prompt and the parser cannot drift. */
-export const EXTRACTION_PROMPT = `You extract booking fields from a salon booking conversation.
+export const EXTRACTION_PROMPT = `You extract booking fields from a booking conversation.
 Reply with a single JSON object and nothing else. No prose, no markdown fence.
 
 Fields: service (string|null), date ("YYYY-MM-DD" in the user's timezone or null),

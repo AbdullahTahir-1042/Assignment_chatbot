@@ -144,7 +144,10 @@ const isInThePast = (date: string, time: string, timezone: string): boolean => {
 const fieldQuestion = (field: string): string => {
   switch (field) {
     case "service":
-      return "Which service would you like? For example: Haircut, Manicure, Colour.";
+      // Deliberately no example list. The service field is free text and this
+      // app serves any slot-based business, so a hardcoded "Haircut, Manicure,
+      // Colour" would push one industry's menu at every tenant.
+      return "Which service would you like?";
     case "date":
       return "What date would you like?";
     case "time":
@@ -169,12 +172,13 @@ export const chatService = {
    * One chat turn. Order of decisions, in order:
    *   1. Is the session real and still active? (no AI call)
    *   2. Did the user just answer yes to a confirmation? (book, no AI call)
-   *   3. Did the user say no? (abandon, no AI call)
+   *   3. Did the user decline the offer? (drop the draft, stay active, no AI call)
    *   4. Otherwise: extract, then decide what to say.
    *
    * Steps 2 and 3 deliberately never call the model. "yes" is not a booking
    * instruction to parse, and routing it through an LLM would make the one
-   * decision that matters depend on a probabilistic call.
+   * decision that matters depend on a probabilistic call. The same applies to
+   * a decline: it only needs to clear the draft, not be understood.
    */
   async message(
     tenant: Tenant,
@@ -207,9 +211,15 @@ export const chatService = {
     // ordinary input and belongs to the extractor.
     const wasConfirming = session.draft.startsAtUtc !== undefined;
 
-    // --- 3. a whole-message decline ends the flow ---------------------------
+    // --- 3. a whole-message decline drops the offer, not the conversation ----
     if (wasConfirming && DECLINE.test(lower)) {
-      const done = await chatRepository.abandonSession(pool, session.id);
+      // The user does not want THAT booking, but that is not a reason to kill
+      // the thread -- they usually want to keep negotiating. Stay active, clear
+      // every collected field so nothing stale can be confirmed later, and hand
+      // back to the input. The explicit POST /:id/cancel endpoint remains the
+      // hard stop, and the user's decline is saved so a resumed session shows
+      // the whole transcript.
+      const resetDraft: Draft = {};
       const saved = await chatRepository.addMessage(pool, {
         sessionId: session.id,
         role: "user",
@@ -219,13 +229,11 @@ export const chatService = {
         sessionId: session.id,
         role: "assistant",
         content: DECLINE_REPLY,
-        meta: { kind: "abandoned" },
+        meta: { kind: "declined" },
       });
-      logger.info({ sessionId: session.id, userMessageId: saved.id }, "chat abandoned by user");
-      return {
-        ...base(session.id, "abandoned", DECLINE_REPLY, session.draft),
-        status: done.status,
-      };
+      await chatRepository.saveDraft(pool, session.id, resetDraft);
+      logger.info({ sessionId: session.id, userMessageId: saved.id }, "booking offer declined, session stays active");
+      return base(session.id, "active", DECLINE_REPLY, resetDraft);
     }
 
     // --- 2. a whole-message "yes" books, inside one transaction -------------
