@@ -1,7 +1,7 @@
 import type { NeedsFormReason } from "../../chat.types";
 
 const COPY: Record<NeedsFormReason, string> = {
-  ai_unavailable: "The booking assistant is not responding right now.",
+  ai_unavailable: "The Slotly assistant is not responding right now.",
   ai_unparseable: "I could not read that reply.",
   ai_truncated: "That reply was cut off.",
   invalid_time: "That time could not be used.",

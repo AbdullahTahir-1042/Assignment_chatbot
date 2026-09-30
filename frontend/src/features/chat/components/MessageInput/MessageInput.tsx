@@ -1,5 +1,9 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { SendButton } from "../SendButton";
+
+// The input starts at the send button's height and grows with its content,
+// stopping at this many pixels — after which it scrolls instead of stretching.
+const MAX_INPUT_HEIGHT = 120;
 
 type MessageInputProps = {
   onSend: (text: string) => void;
@@ -9,6 +13,7 @@ type MessageInputProps = {
 
 export const MessageInput = ({ onSend, isSending, disabled = false }: MessageInputProps) => {
   const [text, setText] = useState("");
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const submit = () => {
     const trimmed = text.trim();
@@ -16,6 +21,15 @@ export const MessageInput = ({ onSend, isSending, disabled = false }: MessageInp
     onSend(trimmed);
     setText("");
   };
+
+  // Match WhatsApp's grow-then-scroll: size to the content each time it changes,
+  // clamped to the cap, so the box never outgrows its allotted space.
+  useEffect(() => {
+    const el = textareaRef.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${Math.min(el.scrollHeight, MAX_INPUT_HEIGHT)}px`;
+  }, [text]);
 
   return (
     <form
@@ -29,6 +43,7 @@ export const MessageInput = ({ onSend, isSending, disabled = false }: MessageInp
         Message
       </label>
       <textarea
+        ref={textareaRef}
         id="chat-message"
         value={text}
         onChange={(e) => setText(e.target.value)}
@@ -40,10 +55,11 @@ export const MessageInput = ({ onSend, isSending, disabled = false }: MessageInp
             submit();
           }
         }}
-        rows={2}
+        rows={1}
         placeholder="Type a message"
         disabled={disabled || isSending}
-        className="flex-1 resize-none rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none disabled:bg-slate-50"
+        className="max-h-[120px] min-h-8 flex-1 resize-none overflow-y-auto rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm shadow-xs transition-[border-color,box-shadow] duration-150 placeholder:text-slate-400 hover:border-slate-400 focus:border-indigo-500 focus:outline-none focus:ring-4 focus:ring-indigo-500/10 disabled:bg-slate-50 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        style={{ height: "2rem" }}
       />
       <SendButton onClick={submit} isLoading={isSending} disabled={disabled || !text.trim()} />
     </form>

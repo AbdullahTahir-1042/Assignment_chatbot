@@ -11,8 +11,10 @@ export const MessageBubble = ({ message }: MessageBubbleProps) => {
     <div className={cn("flex", isUser ? "justify-end" : "justify-start")}>
       <div
         className={cn(
-          "max-w-[85%] whitespace-pre-wrap rounded-lg px-3 py-2 text-sm",
-          isUser ? "bg-slate-900 text-white" : "border border-slate-200 bg-white text-slate-900",
+          "max-w-[85%] whitespace-pre-wrap rounded-2xl px-3.5 py-2 text-sm leading-relaxed",
+          isUser
+            ? "bg-gradient-to-br from-indigo-600 to-violet-600 text-white shadow-sm shadow-indigo-600/25"
+            : "border border-slate-200 bg-white text-slate-900 shadow-sm shadow-slate-900/5",
         )}
       >
         {message.content}

@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "react";
 import type { ChatMessage } from "../../chat.types";
 import { MessageBubble } from "../MessageBubble";
+import { TypingIndicator } from "../TypingIndicator";
 
 type MessageListProps = {
   messages: ChatMessage[];
@@ -37,9 +38,9 @@ export const MessageList = ({ messages, isSending }: MessageListProps) => {
         <MessageBubble key={m.id} message={m} />
       ))}
       {isSending && (
-        <p className="text-sm text-slate-500" role="status">
-          Thinking...
-        </p>
+        <div className="flex justify-start pl-1">
+          <TypingIndicator show />
+        </div>
       )}
       <div ref={endRef} />
     </div>
