@@ -23,7 +23,35 @@ export function createApp() {
   app.set("trust proxy", 1);
 
   app.use(helmet());
-  app.use(cors({ origin: env.CORS_ORIGIN, credentials: true }));
+  app.use(
+    cors({
+      // Resolved per request against the configured allowlist. An exact entry
+      // matches exactly; a "https://*.vercel.app" entry matches any subdomain of
+      // it, which is what keeps preview deployments working. A refused origin is
+      // answered by simply omitting the CORS headers -- the browser does the
+      // blocking, so the server never has to invent a rejection of its own.
+      origin: (origin, callback) => {
+        // No Origin header at all: curl, the health check, server-to-server.
+        // CORS does not apply, so no headers are emitted.
+        if (!origin) {
+          callback(null, false);
+          return;
+        }
+        const allowed = env.CORS_ORIGIN.some((entry) => {
+          if (entry === "*") return true;
+          if (!entry.includes("*.")) return entry === origin;
+          const scheme = entry.slice(0, entry.indexOf("://"));
+          // Skip "*." itself, not just the "*": indexOf returns the star's
+          // index, so +1 would leave the dot in the suffix and every comparison
+          // would look for "..vercel.app".
+          const suffix = entry.slice(entry.indexOf("*.") + "*.".length);
+          return origin.startsWith(`${scheme}://`) && origin.endsWith(`.${suffix}`);
+        });
+        callback(null, allowed);
+      },
+      credentials: true,
+    }),
+  );
   app.use(express.json({ limit: "100kb" }));
   app.use(requestLogger);
 

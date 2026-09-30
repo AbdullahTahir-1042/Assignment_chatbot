@@ -2,6 +2,17 @@ import "dotenv/config";
 import { z } from "zod";
 
 /**
+ * One entry of the CORS allowlist: "*", an exact origin, or a wildcard
+ * subdomain pattern like "https://*.vercel.app".
+ *
+ * A path or a trailing slash is rejected on purpose. The cors middleware
+ * compares against the browser's Origin header, which never carries either, so
+ * "https://app.example.com/" would parse fine here and then never match
+ * anything at runtime.
+ */
+const ORIGIN_ENTRY = /^(?:\*|https?:\/\/(?:\*\.)?[a-z0-9-]+(?:\.[a-z0-9-]+)*(?::\d{1,5})?)$/i;
+
+/**
  * Parsed once at import time so a misconfigured environment kills the process
  * at boot rather than at the first request that happens to need the value.
  *
@@ -29,7 +40,26 @@ const envSchema = z.object({
   // version/variant nibbles of 0, so z.uuid() would reject a value the
   // database itself accepts.
   DEFAULT_BUSINESS_ID: z.guid(),
-  CORS_ORIGIN: z.url().default("http://localhost:5173"),
+  /**
+   * Comma-separated allowlist, so one variable can carry dev, preview and
+   * production origins at once. A single origin still works and parses as a
+   * one-entry list. The wildcard form exists because a static host mints a new
+   * subdomain for every preview deployment, and a list of those is unbounded.
+   */
+  CORS_ORIGIN: z
+    .string()
+    .default("http://localhost:5173")
+    .transform((raw) =>
+      raw
+        .split(",")
+        .map((entry) => entry.trim())
+        .filter((entry) => entry.length > 0),
+    )
+    .refine((origins) => origins.length > 0, "CORS_ORIGIN must list at least one origin")
+    .refine(
+      (origins) => origins.every((entry) => ORIGIN_ENTRY.test(entry)),
+      'CORS_ORIGIN entries must be "*", or an origin such as https://app.example.com or https://*.example.com (no path, no trailing slash)',
+    ),
   /**
    * bcrypt work factor. 12 is the production default. The test suite sets 4,
    * because it performs 60+ cost-12 hashes and compares; at 12 that is ~13s of
