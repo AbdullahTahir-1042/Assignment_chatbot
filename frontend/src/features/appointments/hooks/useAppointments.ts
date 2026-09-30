@@ -1,3 +1,4 @@
+import { useCallback } from "react";
 import { useInfiniteQuery, useQueryClient } from "@tanstack/react-query";
 import { queryKeys } from "../../../lib/queryKeys";
 import { appointmentsApi } from "../appointments.api";
@@ -26,5 +27,5 @@ export const useAppointments = () =>
  */
 export const useInvalidateAppointments = () => {
   const queryClient = useQueryClient();
-  return () => queryClient.invalidateQueries({ queryKey: queryKeys.allAppointments });
+  return useCallback(() => queryClient.invalidateQueries({ queryKey: queryKeys.allAppointments }), [queryClient]);
 };

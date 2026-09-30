@@ -1,9 +1,11 @@
 export { AppointmentForm } from "./components/AppointmentForm";
 export { AppointmentList } from "./components/AppointmentList";
 export { AppointmentItem } from "./components/AppointmentItem";
+export { AppointmentCalendar } from "./components/AppointmentCalendar";
 export { CancelButton } from "./components/CancelButton";
 export { StatusBadge } from "./components/StatusBadge";
 export { useAppointments } from "./hooks/useAppointments";
+export { useInvalidateAppointments } from "./hooks/useAppointments";
 export { useCreateAppointment } from "./hooks/useCreateAppointment";
 export { useCancelAppointment } from "./hooks/useCancelAppointment";
 export { appointmentsApi } from "./appointments.api";

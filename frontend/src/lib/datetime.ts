@@ -39,6 +39,24 @@ export const formatInUserZone = (iso: string, opts?: Intl.DateTimeFormatOptions)
   }).format(date);
 };
 
+/**
+ * The calendar-day key of an instant, in the user's zone: "2026-09-30". Grouping
+ * and the calendar grid both key off this, so a slot that lands on one side of
+ * midnight in UTC still appears on the day the user actually sees.
+ */
+export const dateKeyInUserZone = (iso: string): string => {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return iso;
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: browserTimezone(),
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(date);
+  const part = (type: Intl.DateTimeFormatPartTypes) => parts.find((p) => p.type === type)?.value ?? "";
+  return `${part("year")}-${part("month")}-${part("day")}`;
+};
+
 /** The zoned abbreviation, e.g. "GMT+5", for the confirmation summary. */
 export const zoneLabel = (): string => {
   try {
