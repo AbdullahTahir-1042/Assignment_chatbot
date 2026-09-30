@@ -452,6 +452,8 @@ call the model — the decisions that matter are not left to a probabilistic cal
                               "Shall I book …?"  → awaitingConfirmation
 ```
 
+**AI interaction logging.** Every model call stores `prompt_tokens`, `completion_tokens`, `reasoning_tokens`, `finish_reason`, `latency_ms` and the turn kind in `chat_messages.meta` (jsonb, snake_case keys because jsonb lowercases keys). The model's reasoning text is counted but never stored. Failures also record the reason (`ai_unavailable`, `ai_unparseable`, `ai_truncated`).
+
 **The extractor's contract.** The system prompt demands a single JSON object
 and nothing else, listing only the fields already collected, the recent
 transcript, and the newest message explicitly — history is read *before* the
@@ -789,6 +791,42 @@ tight. Login counts failures only. Chat is per user, not per IP, so a shared
 office NAT can't exhaust your AI budget.
 
 ---
+
+## ⚖️ Tradeoffs
+
+| Choice | Why | What it costs |
+|---|---|---|
+| **Request/response chat, no WebSockets or polling** | Each message returns the assistant's reply in the same HTTP call, so the chat feels real-time without extra infrastructure. | No server push. If bookings could change from another device, the chat would not know until the next message. |
+| **Raw SQL with `pg`, no ORM** | The core guarantees (exclusion constraint, composite FKs, triggers) are Postgres features that an ORM hides. | More boilerplate and hand-written row mapping. |
+| **Double-booking enforced by a DB constraint, not an app-level check** | A SELECT-then-INSERT races under concurrency. | Availability cannot be shown before booking, only rejected at write time. |
+| **The model returns fields only; code writes every reply** | Confirmation always matches what is booked, and injection has nothing to act on. | Replies are less fluid than free-form LLM text. |
+| **Confirmation turn before booking** | Guards against misread dates. | One extra message per booking. |
+| **`tsx` runs the TypeScript directly in production** | No separate build step, one runtime path for dev and prod. | Slightly slower cold start than compiled JS; `build` is only a typecheck. |
+| **Migrations run on start (`npm run migrate && npm start`)** | Works on hosts with no release phase. | Every restart re-checks migrations. |
+| **JWT stored in `localStorage`** | Simple, works cross-origin with no CSRF handling. | Readable by any XSS. An httpOnly cookie would be safer but needs CSRF protection. |
+| **In-memory rate limiting** | No extra service. | Limits are per instance; multiple instances would need a shared store such as Redis. |
+
+
+## 📌 Assumptions
+
+- Times are interpreted in the browser's IANA timezone, sent with each chat message.
+- Every new account joins one demo business (`DEFAULT_BUSINESS_ID`).
+- `service` is free text; durations are 5-480 minutes, default 30.
+- Input is English, and bookings are for the signed-in user only.
+- A booking may start at any future time (no business hours are modelled).
+
+## 🚧 Known Limitations
+
+- **One bookable resource per business.** The overlap constraint is per business, so one booking blocks that time for everyone in it. A `resource_id` (chair, staff member) in the constraint is the natural next step. In the demo, all users share one calendar, so a slot may already be taken by someone else; try an unusual time.
+- **No roles.** There is no owner, staff, or admin distinction and no business-wide view.
+- **`EMAIL_TAKEN` on signup reveals that an account exists.** Accepted tradeoff for clear feedback; login errors are generic.
+- **Free-tier AI limits.** Groq's free tier can return 429s under load. The app falls back to the form, but the assistant will be unavailable until the limit resets.
+- **Free-tier hosting sleeps.** The first request after idle can take up to a minute.
+- **The AI can still misread a request.** Injection cannot make it book, but a wrong extraction is possible; the confirmation step exists for that reason.
+- **Chat cannot reschedule or cancel existing appointments.** Cancel is a UI action.
+- **No email or SMS notifications, and no recurring appointments.**
+- **Rate limits are per process** (see Tradeoffs).
+
 
 ## 🤝 Contribution Guidelines
 
