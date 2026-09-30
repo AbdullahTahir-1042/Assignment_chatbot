@@ -61,6 +61,13 @@ gets a real form pre-filled with whatever was collected, not a dead end.
 
 ---
 
+## 🔗 Live Demo
+
+- **App:** https://assignment-chatbot.vercel.app
+- **API:** https://sloty-api-xaoa.onrender.com/api/health
+
+> The API runs on a free instance that sleeps when idle, so the first request can take up to a minute.
+
 ## 🚀 Features
 
 ### 🤖 Conversational Booking (AI-Assisted)
