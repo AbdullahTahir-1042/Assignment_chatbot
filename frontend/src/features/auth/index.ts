@@ -1,11 +1,12 @@
 export { LoginForm } from "./components/LoginForm";
 export { SignupForm } from "./components/SignupForm";
 export { authApi } from "./auth.api";
-export { loginSchema, signupSchema } from "./auth.schema";
+export { loginSchema, signupSchema, updateProfileSchema } from "./auth.schema";
 export { useAuthStore, selectIsAuthenticated } from "./auth.store";
 export { useLogin } from "./hooks/useLogin";
 export { useSignup } from "./hooks/useSignup";
 export { useLogout } from "./hooks/useLogout";
 export { useCurrentUser } from "./hooks/useCurrentUser";
+export { useUpdateProfile } from "./hooks/useUpdateProfile";
 export type { AuthUser, AuthResponse } from "./auth.types";
-export type { LoginInput, SignupInput } from "./auth.schema";
+export type { LoginInput, SignupInput, UpdateProfileInput } from "./auth.schema";

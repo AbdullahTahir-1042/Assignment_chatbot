@@ -19,6 +19,7 @@ type AuthState = {
   token: string | null;
   user: AuthUser | null;
   setSession: (token: string, user: AuthUser) => void;
+  setUser: (user: AuthUser) => void;
   clear: () => void;
 };
 
@@ -31,6 +32,7 @@ export const useAuthStore = create<AuthState>()(
         tokenStore.set(token);
         set({ token, user });
       },
+      setUser: (user) => set({ user }),
       clear: () => {
         // Both the zustand copy and the raw key, so a rehydration cannot
         // resurrect a token the user just signed out of.

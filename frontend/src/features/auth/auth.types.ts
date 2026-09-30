@@ -4,6 +4,8 @@ export type AuthUser = {
   email: string;
   name: string;
   businessId: string;
+  /** Present after the /auth/me revalidation; absent from an old localStorage session. */
+  createdAt?: string;
 };
 
 export type AuthResponse = {
