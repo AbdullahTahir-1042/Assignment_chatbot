@@ -27,6 +27,41 @@ const DEFAULT_DURATION = 30;
 /** Postgres SQLSTATE for the exclusion constraint. */
 const EXCLUSION_VIOLATION = "23P01";
 
+const DECLINE_REPLY = "No problem. Let me know when you're ready.";
+
+/**
+ * Whole-message only, and only consulted while a session is confirming.
+ *
+ * These are deliberately not /\b/-anchored. A user typing "no, make it 5pm
+ * instead" or "cancel that, do 3pm" is correcting a booking, not declining it,
+ * and an unanchored prefix match would abandon a live session mid-negotiation.
+ * Anything longer than the bare word falls through to the extractor, which is
+ * where corrections belong.
+ */
+const DECLINE =
+  /^(no|nope|nah|no thanks|thanks no|never ?mind|nevermind|cancel|stop|forget it)[.!]?$/;
+const AFFIRM = /^(yes|yeah|yep|yup|sure|ok|okay|confirm|book it|do it|go ahead)[.!]?$/;
+
+/**
+ * An IANA zone from the client, or null. The browser sends `Intl
+ * .DateTimeFormat().resolvedOptions().timeZone`, which is why the frontend
+ * passes it: without it every user gets the server's zone and the demo shows
+ * an interviewer in another country the wrong time.
+ *
+ * Validated through Intl rather than trusted, because a bad zone reaching
+ * resolveLocalToUtc would be rejected there and strand the turn.
+ */
+const resolveTimezone = (tz: string | undefined): string | undefined => {
+  if (!tz) return undefined;
+  try {
+    new Intl.DateTimeFormat("en-US", { timeZone: tz });
+    return tz;
+  } catch {
+    logger.warn({ tz }, "rejecting unknown IANA timezone from client");
+    return undefined;
+  }
+};
+
 const isSlotTaken = (err: unknown): boolean =>
   typeof err === "object" && err !== null && "code" in err && err.code === EXCLUSION_VIOLATION;
 
@@ -83,6 +118,12 @@ const buildUserPrompt = (draft: Draft, history: { role: string; content: string 
   ].join("\n");
 };
 
+/** Whether the wall-clock the model produced is already behind us. */
+const isInThePast = (date: string, time: string, timezone: string): boolean => {
+  const local = DateTime.fromISO(`${date}T${time}`, { zone: timezone });
+  return local.isValid && local.toUTC() < DateTime.utc();
+};
+
 const fieldQuestion = (field: string): string => {
   switch (field) {
     case "service":
@@ -120,7 +161,7 @@ export const chatService = {
    */
   async message(
     tenant: Tenant,
-    input: { sessionId?: string | undefined; text: string },
+    input: { sessionId?: string | undefined; text: string; timezone?: string | undefined },
   ): Promise<ChatReply> {
     const session = input.sessionId
       ? await chatRepository.requireSession(pool, input.sessionId, tenant)
@@ -135,12 +176,22 @@ export const chatService = {
       );
     }
 
-    const timezone = session.draft.timezone ?? DEFAULT_TIMEZONE;
+    const timezone = resolveTimezone(input.timezone) ?? session.draft.timezone ?? DEFAULT_TIMEZONE;
     const text = input.text.trim();
     const lower = text.toLowerCase();
 
-    // --- 3. a plain "no" ends the flow -------------------------------------
-    if (/^(no|nope|thanks,? no|never ?mind|cancel)\b/.test(lower)) {
+    // A session is only "confirming" when it holds a resolved instant to
+    // confirm. Both yes and no are anchored to the WHOLE message and only
+    // apply in that state.
+    //
+    // Without the anchors, "no, make it 5pm instead" abandons a live booking
+    // and "ok but shift to Friday" books the wrong time -- `\b` matches after
+    // "no" because a comma or space follows. In any other state a "no" is
+    // ordinary input and belongs to the extractor.
+    const wasConfirming = session.draft.startsAtUtc !== undefined;
+
+    // --- 3. a whole-message decline ends the flow ---------------------------
+    if (wasConfirming && DECLINE.test(lower)) {
       const done = await chatRepository.abandonSession(pool, session.id);
       const saved = await chatRepository.addMessage(pool, {
         sessionId: session.id,
@@ -150,24 +201,23 @@ export const chatService = {
       await chatRepository.addMessage(pool, {
         sessionId: session.id,
         role: "assistant",
-        content: "No problem. Let me know when you're ready.",
+        content: DECLINE_REPLY,
         meta: { kind: "abandoned" },
       });
       logger.info({ sessionId: session.id, userMessageId: saved.id }, "chat abandoned by user");
       return {
-        ...base(session.id, "abandoned", "No problem. Let me know when you're ready.", session.draft),
+        ...base(session.id, "abandoned", DECLINE_REPLY, session.draft),
         status: done.status,
       };
     }
 
-    // --- 2. a "yes" to a pending confirmation books, inside one transaction --
-    const wasConfirming = session.draft.startsAtUtc !== undefined;
-    if (wasConfirming && /^(yes|yeah|yep|yup|confirm|ok|okay|sure|book it|do it)\b/.test(lower)) {
+    // --- 2. a whole-message "yes" books, inside one transaction -------------
+    if (wasConfirming && AFFIRM.test(lower)) {
       return chatService.confirm(tenant, session);
     }
 
     if (wasConfirming) {
-      // Not a yes: treat as more information rather than silently booking.
+      // Something else: treat it as more information rather than booking.
       logger.debug({ sessionId: session.id }, "confirmation turn received a non-yes reply");
     }
 
@@ -233,29 +283,35 @@ export const chatService = {
       return base(session.id, "active", question, saved.draft);
     }
 
-    // All fields present. Resolve to a UTC instant; a null here means the user
-    // gave a time that cannot exist (DST gap) or is already past, so re-ask
-    // rather than booking something they did not ask for.
+    // All fields present. Resolve to a UTC instant; a null here means the time
+    // cannot exist (DST gap) or is already past.
     const startsAt = resolveLocalToUtc({
       date: merged.date!,
       time: merged.time!,
       timezone,
     });
     if (!startsAt) {
-      const question = DateTime.now().setZone(timezone) > DateTime.fromISO(`${merged.date}T${merged.time}`, { zone: timezone })
-        ? "That time has already passed. What other date and time would suit you?"
-        : "I couldn't read that date and time. Could you rephrase it?";
+      // date AND time are both cleared, and needsForm stays false.
+      //
+      // Keeping them would strand the session: the next message merges into a
+      // draft that still holds the unresolvable pair and fails identically, so
+      // the user is asked the same question forever. Clearing both lets one
+      // corrected value ("3pm on Friday") rebuild the pair.
+      //
+      // This is also not a needsForm case -- the user did nothing wrong and only
+      // needs to pick another time. The fallback form is for AI failures.
+      const kept: Draft = { service: merged.service, timezone };
+      const question = isInThePast(merged.date!, merged.time!, timezone)
+        ? "That time has already passed. What date and time would suit you instead?"
+        : "I couldn't read that date and time. Could you give me another?";
+      const saved = await chatRepository.saveDraft(pool, session.id, kept);
       await chatRepository.addMessage(pool, {
         sessionId: session.id,
         role: "assistant",
         content: question,
         meta: { ...result.usage, kind: "invalid_time" },
       });
-      return {
-        ...base(session.id, "active", question, merged),
-        needsForm: true,
-        needsFormReason: "invalid_time",
-      };
+      return base(session.id, "active", question, saved.draft);
     }
 
     const ready: Draft = {

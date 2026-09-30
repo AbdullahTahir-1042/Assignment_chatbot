@@ -53,7 +53,9 @@ export const localNowForPrompt = (timezone: string): { date: string; time: strin
   return { date: local.toFormat("yyyy-MM-dd"), time: local.toFormat("HH:mm") };
 };
 
-/** "Tue 6 Oct, 4:30 pm" -- the confirmation text, rendered from resolved fields. */
+const CONFIRM_LOCALE = { locale: "en-US" } as const;
+
+/** "Book Haircut on Wed 7 Oct at 4:30 PM?" -- built from resolved fields. */
 export const formatConfirmation = (input: {
   service: string;
   startsAt: Date;
@@ -63,7 +65,12 @@ export const formatConfirmation = (input: {
   if (!local.isValid) {
     return `Book ${input.service}?`;
   }
-  return `Book ${input.service} on ${local.toFormat("ccc d LLL")} at ${local.toFormat("h:mm a")}?`;
+  // Locale pinned: the "a" token renders "PM" in en-US and something else under
+  // other host locales, and this string is what the user reads back to confirm.
+  return `Book ${input.service} on ${local.toFormat("ccc d LLL", CONFIRM_LOCALE)} at ${local.toFormat(
+    "h:mm a",
+    CONFIRM_LOCALE,
+  )}?`;
 };
 
 /** The minimum a booking needs before code will offer to confirm it. */

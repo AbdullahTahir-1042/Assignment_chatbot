@@ -16,6 +16,23 @@ const tenantOf = (res: Response) =>
 const messageSchema = z.object({
   sessionId: z.guid("sessionId must be a uuid").optional(),
   text: z.string().trim().min(1, "text must not be empty").max(2000),
+  /**
+   * The client's IANA zone, straight from `Intl.DateTimeFormat().resolvedOptions
+   * .timeZone`. Validated here rather than in the service so a bad zone is a
+   * 400 the caller can see, instead of a silently-fallback booking.
+   */
+  timezone: z
+    .string()
+    .max(64)
+    .refine((tz) => {
+      try {
+        new Intl.DateTimeFormat("en-US", { timeZone: tz });
+        return true;
+      } catch {
+        return false;
+      }
+    }, "timezone must be a valid IANA zone")
+    .optional(),
 });
 
 const sessionParamsSchema = z.object({

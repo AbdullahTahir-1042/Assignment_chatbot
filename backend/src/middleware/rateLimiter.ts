@@ -47,13 +47,27 @@ export const authLimiter = rateLimit({
 });
 
 /**
- * Every chat turn costs a Groq call, so this is also the spend limiter.
+ * Every chat turn costs a Groq call, so this is the spend limiter.
  * Deliberately looser than auth -- a real conversation is more than 10 turns.
+ *
+ * Keyed on the authenticated user, not the IP. `authenticate` must run before
+ * this in the chain, which is why it is mounted inside chatRouter rather than
+ * on the /api/chat prefix in app.ts. An IP key would let a shared office or
+ * conference wifi exhaust one person's Groq budget for everyone behind the same
+ * NAT, and a bot rotating IPs would still be bounded only per-address.
  */
 export const chatLimiter = rateLimit({
   ...shared,
   windowMs: 60 * 1000,
   limit: 20,
+  keyGenerator: (req) => {
+    const auth = req.res?.locals["auth"] as { userId?: string } | undefined;
+    return auth?.userId ?? req.ip ?? "anonymous";
+  },
+  // A missing/failed key must not silently disable the limiter, so an
+  // unauthenticated request is counted under its own bucket rather than
+  // bypassing the budget.
+  validate: { keyGeneratorIpFallback: false },
 });
 
 /** Default for the rest of the API. */
