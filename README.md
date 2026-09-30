@@ -563,7 +563,7 @@ CORS_ORIGIN=http://localhost:5173
 | `DEFAULT_BUSINESS_ID` | ✅ | — | Postgres-style uuid (not RFC-9562-strict) |
 | `AI_MODEL` | — | `openai/gpt-oss-120b` | `llama-3.3-70b-versatile` is retired on Groq's self-serve tier |
 | `PORT` | — | `4000` | |
-| `CORS_ORIGIN` | — | `http://localhost:5173` | Add your deployed frontend origin |
+| `CORS_ORIGIN` | — | `http://localhost:5173` | Comma-separated allowlist; entries may be `https://app.example.com` or `https://*.example.com` |
 | `BCRYPT_COST` | — | `12` | Tests use `4` to keep the suite fast |
 | `NODE_ENV` | — | `development` | |
 
@@ -622,6 +622,17 @@ Node service works (Render, Railway, Fly.io, or your own VM).
 - **Environment:** set the variables from the table above in the host's
   dashboard. Run `npm run migrate` **once** (a shell/one-off job) against
   `DATABASE_URL_DIRECT` before serving traffic.
+- **Allow the frontend's origins.** `CORS_ORIGIN` takes a comma-separated
+  allowlist, so one variable covers every environment:
+
+  ```ini
+  CORS_ORIGIN=http://localhost:5173,https://assignment-chatbot.vercel.app,https://*.vercel.app
+  ```
+
+  The wildcard form is what keeps preview deployments working — a static host
+  mints a new subdomain per push, so those origins are unbounded. Entries must be
+  bare origins: no path, no trailing slash. An origin outside the list is
+  refused by omitting the CORS headers, which the browser treats as a block.
 - `trust proxy` is already enabled, so the rate limiter sees real client IPs
   behind the platform's proxy hop.
 
@@ -672,6 +683,7 @@ supertest — no port is bound.
 | `chat.test.ts` | Happy path, one-missing-field asking, every AI failure → form, whole-message yes/no anchoring, client timezone, **prompt injection**, taken slot, decline-keeps-session, session authorization |
 | `ai.extractor.test.ts` | Local→UTC resolution, per-timezone "tomorrow", DST spring gap and fall-back hour, past times, prompt-time formatting |
 | `errorMapping.test.ts` | 404 envelope, malformed JSON, oversized body (distinct code), per-field zod issues, no 5xx leakage |
+| `cors.test.ts` | Allowlist: exact origin, wildcard subdomain (previews), parent-domain and cross-scheme refusals, no-`Origin` requests |
 | `overlap.test.ts` | The exclusion constraint directly: partial/contained/wrapping overlaps, touching ranges allowed, per-business scoping, `updated_at` trigger |
 | `validate.test.ts` | body/query/params isolation, coerced values, 400 leaves slots empty |
 
