@@ -25,7 +25,7 @@ export const FormField = ({ label, error, hint, children, ...inputProps }: FormF
   return (
     <div>
       <Label htmlFor={id}>{label}</Label>
-      <div className="mt-1">
+      <div className="mt-1.5">
         {children ? (
           children({ id, "aria-invalid": Boolean(error), ...(describedBy ? { "aria-describedby": describedBy } : {}) })
         ) : (
@@ -38,7 +38,7 @@ export const FormField = ({ label, error, hint, children, ...inputProps }: FormF
         )}
       </div>
       {hint && (
-        <p id={hintId} className="mt-1 text-xs text-slate-500">
+        <p id={hintId} className="mt-1.5 text-xs leading-relaxed text-slate-500">
           {hint}
         </p>
       )}

@@ -1,3 +1,4 @@
 export { AppShell } from "./AppShell";
+export { AuthLayout } from "./AuthLayout";
 export { Header } from "./Header";
-export { LogoutButton } from "./LogoutButton";
+export { UserMenu } from "./UserMenu";

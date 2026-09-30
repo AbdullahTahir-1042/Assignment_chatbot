@@ -12,9 +12,12 @@ export type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
 };
 
 const VARIANTS: Record<NonNullable<ButtonProps["variant"]>, string> = {
-  primary: "bg-slate-900 text-white hover:bg-slate-700 disabled:bg-slate-400",
-  secondary: "border border-slate-300 bg-white text-slate-900 hover:bg-slate-50",
-  ghost: "text-slate-600 hover:bg-slate-100",
+  primary:
+    "bg-gradient-to-b from-indigo-600 to-violet-600 text-white shadow-md shadow-indigo-600/25 " +
+    "hover:from-indigo-500 hover:to-violet-500 active:from-indigo-700 active:to-violet-700 " +
+    "disabled:from-slate-400 disabled:to-slate-400 disabled:shadow-none",
+  secondary: "border border-slate-300 bg-white text-slate-900 shadow-xs hover:bg-slate-50",
+  ghost: "text-slate-600 hover:bg-indigo-50/70",
   danger: "border border-red-200 bg-white text-red-700 hover:bg-red-50",
 };
 
@@ -37,8 +40,8 @@ export const Button = ({
     // fire two identical mutations.
     disabled={disabled || isLoading}
     className={cn(
-      "inline-flex items-center justify-center gap-2 rounded-md font-medium transition-colors",
-      "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-900",
+      "inline-flex items-center justify-center gap-2 rounded-lg font-medium transition-[color,background-color,border-color,box-shadow,opacity] duration-150",
+      "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-500",
       "disabled:cursor-not-allowed disabled:opacity-60",
       VARIANTS[variant],
       SIZES[size],

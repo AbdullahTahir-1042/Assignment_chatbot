@@ -1,6 +1,5 @@
 import { Outlet } from "react-router";
 import { Header } from "../Header";
-import { LogoutButton } from "../LogoutButton";
 
 /**
  * The signed-in chrome. Rendered only under ProtectedRoute, so it never has to
@@ -13,10 +12,5 @@ export const AppShell = () => (
     <main className="flex-1">
       <Outlet />
     </main>
-    <footer className="mx-auto w-full max-w-5xl px-4 pb-6">
-      <div className="flex justify-end">
-        <LogoutButton />
-      </div>
-    </footer>
   </div>
 );

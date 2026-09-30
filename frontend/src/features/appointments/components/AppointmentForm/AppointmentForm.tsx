@@ -64,8 +64,8 @@ export const AppointmentForm = ({ prefill, onBooked }: AppointmentFormProps) => 
   };
 
   return (
-    <Card className="p-4">
-      <h3 className="text-sm font-semibold text-slate-900">Book an appointment</h3>
+    <Card className="p-5">
+      <h3 className="text-sm font-semibold tracking-tight text-slate-900">Book an appointment</h3>
       <p className="mt-0.5 text-xs text-slate-500">Times are in {zoneLabel()}.</p>
 
       <form className="mt-4 space-y-3" onSubmit={submit} noValidate>
