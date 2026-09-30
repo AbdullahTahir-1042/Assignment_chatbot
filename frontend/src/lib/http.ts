@@ -2,6 +2,8 @@
  * The backend's error envelope, mirrored so the UI can switch on `code` rather
  * than parse messages.
  */
+import { apiUrl } from "./config";
+
 export type ApiErrorBody = {
   error: {
     code: string;
@@ -47,7 +49,7 @@ export const tokenStore = {
 };
 
 type RequestOptions = {
-  method?: "GET" | "POST";
+  method?: "GET" | "POST" | "PATCH";
   body?: unknown;
   signal?: AbortSignal;
   /** Skip the bearer header, for signup and login. */
@@ -74,7 +76,7 @@ export const request = async <T>(path: string, options: RequestOptions = {}): Pr
 
   let res: Response;
   try {
-    res = await fetch(`/api${path}`, {
+    res = await fetch(`${apiUrl}/api${path}`, {
       method,
       headers,
       ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
