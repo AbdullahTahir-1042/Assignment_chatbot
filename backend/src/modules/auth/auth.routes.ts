@@ -5,10 +5,11 @@ import { validateBody } from "../../middleware/validate.js";
 import { authenticate } from "../../middleware/authenticate.js";
 import { authLimiter, signupLimiter } from "../../middleware/rateLimiter.js";
 import { UnauthorizedError } from "../../shared/errors/AppError.js";
-import { loginSchema, signupSchema } from "./auth.schema.js";
-import type { LoginInput, SignupInput } from "./auth.schema.js";
+import { loginSchema, signupSchema, updateProfileSchema } from "./auth.schema.js";
+import type { LoginInput, SignupInput, UpdateProfileInput } from "./auth.schema.js";
 import { authRepository } from "./auth.repository.js";
 import { authService } from "./auth.service.js";
+import { auth } from "../../middleware/authenticate.js";
 
 export const authRouter = Router();
 
@@ -49,3 +50,14 @@ authRouter.get("/me", authenticate, async (_req: Request, res: Response) => {
   }
   res.json({ user });
 });
+
+authRouter.patch(
+  "/me",
+  authenticate,
+  validateBody(updateProfileSchema),
+  async (req: Request, res: Response) => {
+    const { userId, businessId } = auth(res);
+    const user = await authService.updateProfile(pool, userId, businessId, req.body as UpdateProfileInput);
+    res.json({ user });
+  },
+);

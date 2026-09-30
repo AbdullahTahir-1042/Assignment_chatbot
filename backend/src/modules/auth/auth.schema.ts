@@ -28,7 +28,15 @@ export const loginSchema = z.object({
   password: z.string().min(1, "Password is required").max(72),
 });
 
+// Editable profile fields only. businessId is a tenant boundary, not a profile
+// property, and password has its own dedicated flow.
+export const updateProfileSchema = z.object({
+  name: z.string().trim().min(1, "Name is required").max(100),
+  email,
+});
+
 export type SignupInput = z.infer<typeof signupSchema>;
 export type LoginInput = z.infer<typeof loginSchema>;
+export type UpdateProfileInput = z.infer<typeof updateProfileSchema>;
 
 export const defaultBusinessId = env.DEFAULT_BUSINESS_ID;

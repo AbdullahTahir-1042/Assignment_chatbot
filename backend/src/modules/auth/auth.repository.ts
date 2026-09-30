@@ -78,4 +78,21 @@ export const authRepository = {
     const row = rows[0];
     return row ? toPublic(row) : null;
   },
+
+  async update(
+    pool: Pool,
+    id: string,
+    businessId: string,
+    input: { email: string; name: string },
+  ): Promise<PublicUser | null> {
+    const { rows } = await pool.query<UserRow>(
+      `UPDATE users
+          SET email = $1, name = $2
+        WHERE id = $3 AND business_id = $4
+        RETURNING id, business_id, email, name, created_at`,
+      [input.email, input.name, id, businessId],
+    );
+    const row = rows[0];
+    return row ? toPublic(row) : null;
+  },
 };

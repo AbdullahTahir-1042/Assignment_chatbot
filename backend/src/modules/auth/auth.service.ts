@@ -4,7 +4,7 @@ import jwt from "jsonwebtoken";
 import type { Pool } from "pg";
 import { env } from "../../config/env.js";
 import { UnauthorizedError } from "../../shared/errors/AppError.js";
-import type { LoginInput, SignupInput } from "./auth.schema.js";
+import type { LoginInput, SignupInput, UpdateProfileInput } from "./auth.schema.js";
 import { authRepository, type PublicUser } from "./auth.repository.js";
 
 const BCRYPT_COST = env.BCRYPT_COST;
@@ -69,6 +69,15 @@ export const authService = {
       createdAt: row.created_at.toISOString(),
     };
     return { token: signToken(user), user };
+  },
+
+  async updateProfile(pool: Pool, userId: string, businessId: string, input: UpdateProfileInput): Promise<PublicUser> {
+    const user = await authRepository.update(pool, userId, businessId, input);
+    if (!user) {
+      // Token is well formed but the user is gone (deleted, or moved tenant).
+      throw new UnauthorizedError("Invalid or expired token");
+    }
+    return user;
   },
 };
 
